@@ -1,0 +1,146 @@
+name: Update PKGBUILD
+
+on:
+  repository_dispatch:
+    types: [cli-release]
+
+  # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix (e.g. 2.8.9)"
+        required: true
+      tag:
+        description: "Git tag (e.g. v2.8.9)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            VERSION="${{ github.event.client_payload.version }}"
+            TAG="${{ github.event.client_payload.tag }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+
+          if [ -z "$VERSION" ] || [ -z "$TAG" ]; then
+            echo "::error::Missing version or tag"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Updating to $TAG (version $VERSION)"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download checksums
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          CHECKSUMS_URL="https://github.com/waftester/waftester/releases/download/${TAG}/checksums.txt"
+          echo "Downloading checksums from $CHECKSUMS_URL"
+          curl -fsSL "$CHECKSUMS_URL" -o checksums.txt
+          cat checksums.txt
+
+      - name: Extract checksums
+        id: checksums
+        run: |
+          X86_64=$(grep "waftester_Linux_x86_64.tar.gz" checksums.txt | awk '{print $1}')
+          AARCH64=$(grep "waftester_Linux_arm64.tar.gz" checksums.txt | awk '{print $1}')
+
+          if [ -z "$X86_64" ] || [ -z "$AARCH64" ]; then
+            echo "::error::Could not find checksums for Linux archives"
+            echo "Available entries:"
+            cat checksums.txt
+            exit 1
+          fi
+
+          echo "x86_64=$X86_64" >> "$GITHUB_OUTPUT"
+          echo "aarch64=$AARCH64" >> "$GITHUB_OUTPUT"
+          echo "x86_64: $X86_64"
+          echo "aarch64: $AARCH64"
+
+      - name: Update PKGBUILD
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_X86_64: ${{ steps.checksums.outputs.x86_64 }}
+          SHA_AARCH64: ${{ steps.checksums.outputs.aarch64 }}
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('${SHA_X86_64}')/" PKGBUILD
+          sed -i "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('${SHA_AARCH64}')/" PKGBUILD
+
+          echo "Updated PKGBUILD:"
+          head -15 PKGBUILD
+
+      - name: Regenerate .SRCINFO
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_X86_64: ${{ steps.checksums.outputs.x86_64 }}
+          SHA_AARCH64: ${{ steps.checksums.outputs.aarch64 }}
+        run: |
+          # Generate .SRCINFO directly — makepkg requires pacman which
+          # isn't available on ubuntu. This package structure is stable.
+          printf 'pkgbase = waftester-bin\n' > .SRCINFO
+          printf '\tpkgdesc = WAF security testing CLI — detect, benchmark, and bypass web application firewalls\n' >> .SRCINFO
+          printf '\tpkgver = %s\n' "$VERSION" >> .SRCINFO
+          printf '\tpkgrel = 1\n' >> .SRCINFO
+          printf '\turl = https://waftester.com\n' >> .SRCINFO
+          printf '\tarch = x86_64\n' >> .SRCINFO
+          printf '\tarch = aarch64\n' >> .SRCINFO
+          printf '\tlicense = custom:BSL-1.1\n' >> .SRCINFO
+          printf '\tprovides = waftester\n' >> .SRCINFO
+          printf '\tconflicts = waftester\n' >> .SRCINFO
+          printf '\tsource_x86_64 = https://github.com/waftester/waftester/releases/download/v%s/waftester_Linux_x86_64.tar.gz\n' "$VERSION" >> .SRCINFO
+          printf '\tsha256sums_x86_64 = %s\n' "$SHA_X86_64" >> .SRCINFO
+          printf '\tsource_aarch64 = https://github.com/waftester/waftester/releases/download/v%s/waftester_Linux_arm64.tar.gz\n' "$VERSION" >> .SRCINFO
+          printf '\tsha256sums_aarch64 = %s\n' "$SHA_AARCH64" >> .SRCINFO
+          printf '\n' >> .SRCINFO
+          printf 'pkgname = waftester-bin\n' >> .SRCINFO
+
+          echo "Generated .SRCINFO:"
+          cat .SRCINFO
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet && { echo "No changes to commit"; exit 0; }
+          git commit -m "chore(aur): update to v${VERSION}"
+          git push
+
+      # Push to AUR if SSH key is configured.
+      # To enable: add AUR_SSH_PRIVATE_KEY secret with an SSH key
+      # registered at https://aur.archlinux.org/account
+      - name: Push to AUR
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+
+          git remote add aur ssh://aur@aur.archlinux.org/waftester-bin.git || true
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes" git push aur main:master
+
+          rm -f ~/.ssh/aur
+          echo "Pushed to AUR"
