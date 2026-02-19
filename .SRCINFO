@@ -1,6 +1,6 @@
 pkgbase = waftester-bin
 	pkgdesc = WAF security testing CLI — detect, benchmark, and bypass web application firewalls
-	pkgver = 2.9.17
+	pkgver = 2.9.19
 	pkgrel = 1
 	url = https://waftester.com
 	arch = x86_64
@@ -8,9 +8,9 @@ pkgbase = waftester-bin
 	license = custom:BSL-1.1
 	provides = waftester
 	conflicts = waftester
-	source_x86_64 = https://github.com/waftester/waftester/releases/download/v2.9.17/waftester_Linux_x86_64.tar.gz
-	sha256sums_x86_64 = eab122620947ae6830fae762c9e776bb5aa5604efccfbf74377327aeb7effb97
-	source_aarch64 = https://github.com/waftester/waftester/releases/download/v2.9.17/waftester_Linux_arm64.tar.gz
-	sha256sums_aarch64 = 2d2fd05365474c56ff22bb3a4f011600f8f1c2ab2f1f30f9871439d431240939
+	source_x86_64 = https://github.com/waftester/waftester/releases/download/v2.9.19/waftester_Linux_x86_64.tar.gz
+	sha256sums_x86_64 = 76c227660697fb6c0b634cd10d6a31e1148a415fd79c939b253cfcf6a9d589ff
+	source_aarch64 = https://github.com/waftester/waftester/releases/download/v2.9.19/waftester_Linux_arm64.tar.gz
+	sha256sums_aarch64 = 8ad4b358afd2c47208709c93d3d3768a40c8a4f71f30f36797c2b2d8f057550c
 
 pkgname = waftester-bin
