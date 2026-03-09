@@ -1,6 +1,6 @@
 # Maintainer: WAFtester <info@waftester.com>
 pkgname=waftester-bin
-pkgver=2.9.48
+pkgver=2.9.49
 pkgrel=1
 pkgdesc="WAF security testing CLI — detect, benchmark, and bypass web application firewalls"
 arch=('x86_64' 'aarch64')
@@ -11,8 +11,8 @@ conflicts=('waftester')
 
 source_x86_64=("https://github.com/waftester/waftester/releases/download/v${pkgver}/waftester_Linux_x86_64.tar.gz")
 source_aarch64=("https://github.com/waftester/waftester/releases/download/v${pkgver}/waftester_Linux_arm64.tar.gz")
-sha256sums_x86_64=('687d884684fca212483d7c0fb26feb447b1866fe64a050828968b26974343bef')
-sha256sums_aarch64=('894596c9761787e60d46a373cd8ede9416d746b9e6fdc317a994613d3ac58b18')
+sha256sums_x86_64=('9d0556286330d9733ca8e687e0eccd04071517b91eb543e4bf391e0545bee0e4')
+sha256sums_aarch64=('f0ebae93ec69f71e9b0cbc4691a4b30a5bf26e0f4004d18df8e4664eca6d0210')
 
 package() {
   install -Dm755 waf-tester "${pkgdir}/usr/bin/waf-tester"
